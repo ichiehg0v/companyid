@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公司統編抬頭比對工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .file-input {
+            margin-bottom: 20px;
+        }
+        #compareBtn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #compareBtn:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>公司統編抬頭比對工具</h1>
+        <h3>原始資料與比對資料表頭需要包含 id 與 name，id 是統編，name 是抬頭。比對的資料存成 csv 時，編碼要用 UTF-8</h3>
+        <h4>原始資料可以從<a href="https://company.g0v.ronny.tw/" target="_blank">台灣公司資料</a> ⭢ 資料打包 ⭢ index.csv.gz 下載，下載後解壓縮就可以使用。</h4>
+        <div class="file-input">
+            <label for="originalFile">上傳原始資料檔案 (CSV)：</label>
+            <input type="file" id="originalFile" accept=".csv">
+        </div>
+        <div class="file-input">
+            <label for="inputFile">上傳需要比對的資料檔案 (CSV)：</label>
+            <input type="file" id="inputFile" accept=".csv">
+        </div>
+        <button id="compareBtn">開始比對</button>
+        <div id="result"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        let comparisonResult;
+
+        document.getElementById('compareBtn').addEventListener('click', () => {
+            const originalFile = document.getElementById('originalFile').files[0];
+            const inputFile = document.getElementById('inputFile').files[0];
+
+            if (!originalFile || !inputFile) {
+                alert('請上傳兩個 CSV 檔案');
+                return;
+            }
+
+            Papa.parse(originalFile, {
+                complete: (originalResults) => {
+                    Papa.parse(inputFile, {
+                        complete: (inputResults) => {
+                            compareData(originalResults.data, inputResults.data);
+                        }
+                    });
+                }
+            });
+        });
+
+        function compareData(originalData, inputData) {
+            const originalDict = {};
+            // 假設原始數據的列順序為：id, type, name
+            for (let i = 1; i < originalData.length; i++) {
+                originalDict[originalData[i][0]] = originalData[i][2]; // 使用 id 和 name
+            }
+
+            comparisonResult = inputData.map((row, index) => {
+                if (index === 0) {
+                    return [...row, '核對結果'];
+                }
+                const id = row[0];  // 假設輸入數據的第一列是 id
+                const name = row[1]; // 假設輸入數據的第二列是 name
+                let result;
+                if (id in originalDict) {
+                    if (name === originalDict[id]) {
+                        result = 'ok';
+                    } else {
+                        result = `不一致: ${originalDict[id]}`;
+                    }
+                } else {
+                    result = '統編不存在';
+                }
+                return [...row, result];
+            });
+
+            displayResult(comparisonResult);
+        }
+
+        function displayResult(data) {
+            const resultDiv = document.getElementById('result');
+            let html = '<h2>比對結果</h2>';
+            html += '<table><tr>';
+            
+            data[0].forEach(header => {
+                html += `<th>${header}</th>`;
+            });
+            html += '</tr>';
+            
+            for (let i = 1; i < data.length; i++) {
+                html += '<tr>';
+                data[i].forEach(cell => {
+                    html += `<td>${cell}</td>`;
+                });
+                html += '</tr>';
+            }
+            
+            html += '</table>';
+            html += '<br><button onclick="downloadCSV()">下載比對結果</button>';
+            
+            resultDiv.innerHTML = html;
+        }
+
+        function downloadCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            comparisonResult.forEach(row => {
+                csvContent += row.join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "comparison_result.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
